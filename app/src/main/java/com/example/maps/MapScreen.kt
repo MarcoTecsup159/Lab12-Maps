@@ -36,12 +36,22 @@ fun MapScreen() {
                 BitmapFactory.decodeResource(context.resources, R.drawable.montana)
             )
 
-            // Añadir marcador en Arequipa Perú
-            Marker(
-                state = rememberMarkerState(position = ArequipaLocation),
-                icon = customIcon,
-                title = "Arequipa, Perú"
+            val locations = listOf(
+                LatLng(-16.433415,-71.5442652), // JLByR
+                LatLng(-16.4205151,-71.4945209), // Paucarpata
+                LatLng(-16.3524187,-71.5675994) // Zamacola
             )
+
+
+            // Añadir marcador en Arequipa Perú
+            locations.forEach { location ->
+                Marker(
+                    state = rememberMarkerState(position = location),
+                    icon = customIcon,
+                    title = "Ubicación",
+                    snippet = "Punto de interés"
+                )
+            }
         }
     }
 }
