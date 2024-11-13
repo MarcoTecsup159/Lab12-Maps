@@ -19,24 +19,55 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.Polygon
 import com.google.maps.android.compose.Polyline
+import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.maps.android.compose.MapProperties
+import androidx.compose.foundation.layout.Column
 
 
 @Composable
 fun MapScreen() {
     val context = LocalContext.current
-    val ArequipaLocation = LatLng(-16.4040102, -71.559611) // Arequipa, Perú
+    val arequipaLocation = LatLng(-16.4040102, -71.559611) // Arequipa, Perú
     val cameraPositionState = rememberCameraPositionState {
-        position = com.google.android.gms.maps.model.CameraPosition.fromLatLngZoom(ArequipaLocation, 12f)
+        position = CameraPosition.fromLatLngZoom(arequipaLocation, 12f)
     }
 
+    // Estado para el tipo de mapa seleccionado
+    var selectedMapType by remember { mutableStateOf(MapType.NORMAL) }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        // Añadir GoogleMap al layout
+    // Propiedades del mapa
+    val mapProperties by remember(selectedMapType) {
+        mutableStateOf(
+            MapProperties(
+                mapType = when (selectedMapType) {
+                    MapType.NORMAL -> com.google.maps.android.compose.MapType.NORMAL
+                    MapType.SATELLITE -> com.google.maps.android.compose.MapType.SATELLITE
+                    MapType.TERRAIN -> com.google.maps.android.compose.MapType.TERRAIN
+                    MapType.HYBRID -> com.google.maps.android.compose.MapType.HYBRID
+                }
+            )
+        )
+    }
+
+    Column {
+        // Selector de tipo de mapa
+        MapTypeSelector(
+            selectedMapType = selectedMapType,
+            onMapTypeSelected = { selectedMapType = it }
+        )
+
+        // GoogleMap con propiedades actualizadas
         GoogleMap(
             modifier = Modifier.fillMaxSize(),
-            cameraPositionState = cameraPositionState
+            cameraPositionState = cameraPositionState,
+            properties = mapProperties
         ) {
-
             val customIcon = BitmapDescriptorFactory.fromBitmap(
                 BitmapFactory.decodeResource(context.resources, R.drawable.montana)
             )
@@ -121,7 +152,48 @@ fun MapScreen() {
                 width = 15f
             )
 
+        }
+    }
+}
 
+enum class MapType {
+    NORMAL,      // Tipo de mapa normal
+    SATELLITE,   // Mapa satelital
+    TERRAIN,     // Mapa de terreno
+    HYBRID       // Mapa híbrido
+}
+
+@Composable
+fun MapTypeSelector(
+    selectedMapType: MapType,
+    onMapTypeSelected: (MapType) -> Unit
+) {
+    val mapTypes = listOf(
+        MapType.NORMAL to "Normal",
+        MapType.SATELLITE to "Satélite",
+        MapType.TERRAIN to "Terreno",
+        MapType.HYBRID to "Híbrido"
+    )
+
+    var expanded by remember { mutableStateOf(false) }
+
+    Box {
+        Button(onClick = { expanded = true }) {
+            Text(text = "Tipo de mapa: ${mapTypes.first { it.first == selectedMapType }.second}")
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            mapTypes.forEach { (type, name) ->
+                DropdownMenuItem(
+                    onClick = {
+                        onMapTypeSelected(type)
+                        expanded = false
+                    },
+                    text = { Text(text = name) }
+                )
+            }
         }
     }
 }
