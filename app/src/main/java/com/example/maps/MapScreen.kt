@@ -1,6 +1,12 @@
 package com.example.maps
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
+import android.location.Location
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -28,6 +34,12 @@ import androidx.compose.runtime.setValue
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.maps.android.compose.MapProperties
 import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.core.content.ContextCompat
+import androidx.core.location.LocationManagerCompat.getCurrentLocation
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
+import kotlinx.coroutines.launch
 
 
 @Composable
@@ -37,6 +49,10 @@ fun MapScreen() {
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(arequipaLocation, 12f)
     }
+
+    val scope = rememberCoroutineScope()
+
+    var currentLocation by remember { mutableStateOf<LatLng?>(null) }
 
     // Estado para el tipo de mapa seleccionado
     var selectedMapType by remember { mutableStateOf(MapType.NORMAL) }
@@ -50,12 +66,85 @@ fun MapScreen() {
                     MapType.SATELLITE -> com.google.maps.android.compose.MapType.SATELLITE
                     MapType.TERRAIN -> com.google.maps.android.compose.MapType.TERRAIN
                     MapType.HYBRID -> com.google.maps.android.compose.MapType.HYBRID
-                }
+                },
+                isMyLocationEnabled = ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED
             )
         )
     }
 
+    val locationPermissionState = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            getCurrentLocation(context) { location ->
+                currentLocation = location
+                scope.launch {
+                    cameraPositionState.animate(
+                        update = CameraUpdateFactory.newCameraPosition(
+                            CameraPosition.fromLatLngZoom(location, 15f)
+                        ),
+                        durationMs = 2000
+                    )
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        when {
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED -> {
+                getCurrentLocation(context) { location ->
+                    currentLocation = location
+                }
+            }
+            else -> locationPermissionState.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+    }
+
     Column {
+
+        Button(onClick = {
+            currentLocation?.let { location ->
+                scope.launch {
+                    cameraPositionState.animate(
+                        update = CameraUpdateFactory.newCameraPosition(
+                            CameraPosition.fromLatLngZoom(location, 15f)
+                        ),
+                        durationMs = 1000
+                    )
+                }
+            } ?: run {
+                //si no tenemos la ubicación actual, solicitamos los permisos
+                if (ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.ACCESS_FINE_LOCATION
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    locationPermissionState.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                } else {
+                    getCurrentLocation(context) { location ->
+                        currentLocation = location
+                        scope.launch {
+                            cameraPositionState.animate(
+                                update = CameraUpdateFactory.newCameraPosition(
+                                    CameraPosition.fromLatLngZoom(location, 15f)
+                                ),
+                                durationMs = 2000
+                            )
+                        }
+                    }
+                }
+            }
+        }) {
+            Text(text = "Mi ubicación")
+        }
+
         // Selector de tipo de mapa
         MapTypeSelector(
             selectedMapType = selectedMapType,
@@ -68,6 +157,14 @@ fun MapScreen() {
             cameraPositionState = cameraPositionState,
             properties = mapProperties
         ) {
+
+            currentLocation?.let { location ->
+                Marker(
+                    state = rememberMarkerState(position = location),
+                    title = "Mi ubicación",
+                )
+            }
+
             val customIcon = BitmapDescriptorFactory.fromBitmap(
                 BitmapFactory.decodeResource(context.resources, R.drawable.montana)
             )
@@ -153,6 +250,24 @@ fun MapScreen() {
             )
 
         }
+    }
+}
+
+private fun getCurrentLocation(
+    context: android.content.Context,
+    onLocationReceived: (LatLng) -> Unit
+) {
+    try {
+        val fusedLocationClient: FusedLocationProviderClient =
+            LocationServices.getFusedLocationProviderClient(context)
+
+        fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
+            location?.let {
+                onLocationReceived(LatLng(it.latitude, it.longitude))
+            }
+        }
+    } catch (e: SecurityException) {
+        e.printStackTrace()
     }
 }
 
